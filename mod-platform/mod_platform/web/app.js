@@ -1,0 +1,12 @@
+const $=s=>document.querySelector(s), api='/api/v1';
+async function request(path,opts={}){const r=await fetch(api+path,{headers:{'Content-Type':'application/json',...(opts.headers||{})},...opts});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||'Request failed');return d}
+function showApp(){ $('#loginView').classList.add('hidden');$('#appView').classList.remove('hidden');$('#logout').classList.remove('hidden');loadAll(); }
+async function check(){try{const m=await request('/auth/me');if(m.authenticated)showApp()}catch{}}check();
+$('#login').onsubmit=async e=>{e.preventDefault();try{await request('/auth/login',{method:'POST',body:JSON.stringify({username:$('#username').value,password:$('#password').value})});showApp()}catch(x){$('#loginError').textContent=x.message;$('#loginError').className='error'}};
+$('#logout').onclick=async()=>{await request('/auth/logout',{method:'POST'});location.reload()};
+for(const f of document.querySelectorAll('form[data-type]'))f.onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(f));try{await request('/'+f.dataset.type,{method:'POST',body:JSON.stringify(data)});f.reset();load(f.dataset.type)}catch(x){alert(x.message)}};
+$('#tokenForm').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.target));try{const d=await request('/tokens',{method:'POST',body:JSON.stringify(data)});$('#tokenOutput').innerHTML=`<div class="token">${d.token}</div>`;e.target.reset();load('tokens')}catch(x){alert(x.message)}};
+async function load(type){const rows=await request('/'+type);const el=$('#'+type);if(type==='tokens'){el.innerHTML=rows.map(x=>`<div class="item"><span>${esc(x.name)} ${x.revoked?'(revoked)':''}</span>${x.revoked?'':`<button class="delete" onclick="revoke(${x.id})">Revoke</button>`}</div>`).join('');return}el.innerHTML=rows.map(x=>`<div class="item"><span>${esc(x.name||x.title)}${x.version?' · '+esc(x.version):''}</span><button class="delete" onclick="removeItem('${type}',${x.id})">Delete</button></div>`).join('')}
+async function loadAll(){for(const t of ['mods','tutorials','links','contributors','tokens'])await load(t)}
+window.removeItem=async(t,id)=>{if(confirm('Delete this item?')){await request('/'+t+'/'+id,{method:'DELETE'});load(t)}};window.revoke=async id=>{await request('/tokens/'+id+'/revoke',{method:'POST'});load('tokens')};
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
