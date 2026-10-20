@@ -1,10 +1,110 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mod Platform</title><link rel="stylesheet" href="/style.css"></head><body>
-<header><div class="brand">CheeksUnseen</div><button id="logout" class="hidden">Log out</button></header>
-<main><section id="loginView" class="card"><h1>Admin</h1><form id="login"><input id="username" placeholder="Username" autocomplete="username"><input id="password" type="password" placeholder="Password" autocomplete="current-password"><button>Sign in</button><p id="loginError"></p></form></section>
-<section id="appView" class="hidden"><div class="hero"><h1>Control panel</h1><p>Manage your mods and project resources.</p></div><div class="grid">
-<div class="card"><h2>Mods</h2><form data-type="mods"><input name="name" placeholder="Name"><input name="version" placeholder="Version"><input name="url" placeholder="Download / page URL"><button>Add mod</button></form><div id="mods"></div></div>
-<div class="card"><h2>Tutorials</h2><form data-type="tutorials"><input name="title" placeholder="Title"><input name="url" placeholder="URL"><button>Add tutorial</button></form><div id="tutorials"></div></div>
-<div class="card"><h2>Links</h2><form data-type="links"><input name="name" placeholder="Name"><input name="url" placeholder="URL"><button>Add link</button></form><div id="links"></div></div>
-<div class="card"><h2>Contributors</h2><form data-type="contributors"><input name="name" placeholder="Name"><input name="url" placeholder="Profile / URL"><button>Add contributor</button></form><div id="contributors"></div></div>
-<div class="card"><h2>Tokens</h2><form id="tokenForm"><input name="name" placeholder="Token name"><button>Create token</button></form><div id="tokenOutput"></div><div id="tokens"></div></div>
-</div></section></main><script src="/app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>CheeksUnseen</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="CheeksUnseen home">
+      <span class="brand-mark" aria-hidden="true">CU</span>
+      <span>cheeksunseen</span>
+    </a>
+    <div class="topbar-right">
+      <button id="logout" class="button button-secondary hidden" type="button">Sign out</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <section id="loginView" class="login-panel">
+      <h1>Sign in</h1>
+      <form id="login" class="form-stack">
+        <label for="username">Username</label>
+        <input id="username" name="username" placeholder="Username" autocomplete="username" required>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" required>
+        <button class="button button-primary" type="submit">Sign in</button>
+        <p id="loginError" class="form-error" role="alert"></p>
+      </form>
+    </section>
+
+    <section id="appView" class="hidden">
+      <nav class="section-nav" aria-label="Resource sections">
+        <a href="#mods-section">Mods</a>
+        <a href="#tutorials-section">Tutorials</a>
+        <a href="#links-section">Links</a>
+        <a href="#contributors-section">Contributors</a>
+        <a href="#tokens-section">Tokens</a>
+      </nav>
+
+      <div class="resource-list">
+        <section id="mods-section" class="resource-section">
+          <div class="section-heading">
+            <h2>Mods</h2>
+          </div>
+          <form data-type="mods" class="entry-form">
+            <input name="name" placeholder="Mod name" aria-label="Mod name" required>
+            <input name="version" placeholder="Version" aria-label="Version">
+            <input name="url" type="url" placeholder="Download or project URL" aria-label="Download or project URL">
+            <button class="button button-primary" type="submit">Add mod</button>
+          </form>
+          <div id="mods" class="item-list"></div>
+        </section>
+
+        <section id="tutorials-section" class="resource-section">
+          <div class="section-heading">
+            <h2>Tutorials</h2>
+          </div>
+          <form data-type="tutorials" class="entry-form">
+            <input name="title" placeholder="Tutorial title" aria-label="Tutorial title" required>
+            <input name="url" type="url" placeholder="Tutorial URL" aria-label="Tutorial URL">
+            <button class="button button-primary" type="submit">Add tutorial</button>
+          </form>
+          <div id="tutorials" class="item-list"></div>
+        </section>
+
+        <section id="links-section" class="resource-section">
+          <div class="section-heading">
+            <h2>Links</h2>
+          </div>
+          <form data-type="links" class="entry-form">
+            <input name="name" placeholder="Link name" aria-label="Link name" required>
+            <input name="url" type="url" placeholder="URL" aria-label="URL">
+            <button class="button button-primary" type="submit">Add link</button>
+          </form>
+          <div id="links" class="item-list"></div>
+        </section>
+
+        <section id="contributors-section" class="resource-section">
+          <div class="section-heading">
+            <h2>Contributors</h2>
+          </div>
+          <form data-type="contributors" class="entry-form">
+            <input name="name" placeholder="Contributor name" aria-label="Contributor name" required>
+            <input name="url" type="url" placeholder="Profile URL" aria-label="Profile URL">
+            <button class="button button-primary" type="submit">Add contributor</button>
+          </form>
+          <div id="contributors" class="item-list"></div>
+        </section>
+
+        <section id="tokens-section" class="resource-section">
+          <div class="section-heading">
+            <h2>Tokens</h2>
+          </div>
+          <form id="tokenForm" class="entry-form token-form">
+            <input name="name" placeholder="Token name" aria-label="Token name" required>
+            <button class="button button-primary" type="submit">Create token</button>
+          </form>
+          <div id="tokenOutput" aria-live="polite"></div>
+          <div id="tokens" class="item-list"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+  <footer class="footer"><span>cheeksunseen</span></footer>
+  <script src="/app.js"></script>
+</body>
+</html>
