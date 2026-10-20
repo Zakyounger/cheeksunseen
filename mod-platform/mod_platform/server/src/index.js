@@ -1,66 +1,43 @@
-import express from 'express';
-import session from 'express-session';
-import Database from 'better-sqlite3';
-import dotenv from 'dotenv';
-import crypto from 'crypto';
-import path from 'path';
-import { fileURLToPath } from 'url';
+const enc=new TextEncoder();
+const hex=n=>{const a=new Uint8Array(n);crypto.getRandomValues(a);return [...a].map(x=>x.toString(16).padStart(2,"0")).join("")};
+async function sha(s){const d=await crypto.subtle.digest("SHA-256",enc.encode(s));return [...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+const json=(x,s=200,h={})=>new Response(JSON.stringify(x),{status:s,headers:{"content-type":"application/json",...h}});
+const cookie=(v,age)=>`cs_session=${v}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
+function getCookie(r){const m=(r.headers.get("Cookie")||"").match(/(?:^|;\s*)cs_session=([^;]+)/);return m?.[1]||null}
+async function admin(r,e){const s=getCookie(r);if(!s)return false;const h=await sha(s);return !!await e.DB.prepare("SELECT id FROM sessions WHERE token_hash=? AND expires_at>?").bind(h,Date.now()).first()}
+async function body(r){try{return await r.json()}catch{return {}}}
+const resources={mods:["name","version","url"],tutorials:["title","url"],links:["name","url"],contributors:["name","url"]};
 
-dotenv.config();
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const app = express();
-const db = new Database(path.join(__dirname, '../data/platform.db'));
-
-db.pragma('journal_mode = WAL');
-db.exec(`
-CREATE TABLE IF NOT EXISTS mods (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, version TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS tutorials (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS links (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS contributors (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, revoked INTEGER NOT NULL DEFAULT 0);
-`);
-
-app.use(express.json());
-app.use(session({ secret: process.env.SESSION_SECRET || 'development-only-secret', resave:false, saveUninitialized:false, cookie:{httpOnly:true,sameSite:'lax',secure:false,maxAge:86400000} }));
-
-const admin = (req,res,next)=> req.session.authenticated ? next() : res.status(401).json({error:'Unauthorized'});
-const hash = s => crypto.createHash('sha256').update(s).digest('hex');
-
-app.post('/api/v1/auth/login',(req,res)=>{
-  const {username,password}=req.body||{};
-  if(username === (process.env.ADMIN_USERNAME||'admin') && password === (process.env.ADMIN_PASSWORD||'change-me')) { req.session.authenticated=true; return res.json({ok:true}); }
-  res.status(401).json({error:'Invalid credentials'});
-});
-app.post('/api/v1/auth/logout',(req,res)=>req.session.destroy(()=>res.json({ok:true})));
-app.get('/api/v1/auth/me',(req,res)=>res.json({authenticated:!!req.session.authenticated}));
-
-const resources={
-  mods:['name','version','url'], tutorials:['title','url'], links:['name','url'], contributors:['name','url']
-};
-for(const [table,fields] of Object.entries(resources)){
-  app.get(`/api/v1/${table}`,(req,res)=>res.json(db.prepare(`SELECT * FROM ${table} ORDER BY id DESC`).all()));
-  app.post(`/api/v1/${table}`,admin,(req,res)=>{
-    const values=fields.map(f=>String(req.body?.[f]??'').trim());
-    if(!values[0]) return res.status(400).json({error:`${fields[0]} is required`});
-    const cols=fields.join(','); const marks=fields.map(()=>'?').join(',');
-    const result=db.prepare(`INSERT INTO ${table} (${cols}) VALUES (${marks})`).run(...values);
-    res.status(201).json(db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(result.lastInsertRowid));
-  });
-  app.delete(`/api/v1/${table}/:id`,admin,(req,res)=>{db.prepare(`DELETE FROM ${table} WHERE id=?`).run(req.params.id);res.json({ok:true});});
-}
-
-app.get('/api/v1/tokens',admin,(req,res)=>res.json(db.prepare('SELECT id,name,created_at,revoked FROM tokens ORDER BY id DESC').all()));
-app.post('/api/v1/tokens',admin,(req,res)=>{
-  const name=String(req.body?.name||'').trim(); if(!name)return res.status(400).json({error:'name is required'});
-  const token=crypto.randomBytes(32).toString('hex'); db.prepare('INSERT INTO tokens(name,token_hash) VALUES(?,?)').run(name,hash(token));
-  res.status(201).json({name,token});
-});
-app.post('/api/v1/tokens/:id/revoke',admin,(req,res)=>{db.prepare('UPDATE tokens SET revoked=1 WHERE id=?').run(req.params.id);res.json({ok:true});});
-
-// Future API modules can be mounted here without changing the core app.
-app.get('/api/v1/health',(req,res)=>res.json({ok:true,version:'v1'}));
-
-app.use(express.static(path.join(__dirname,'../../web')));
-app.get('*',(req,res)=>res.sendFile(path.join(__dirname,'../../web/index.html')));
-const port=Number(process.env.PORT||8787);
-app.listen(port,()=>console.log(`Mod platform running on http://localhost:${port}`));
+export default {async fetch(request,env){
+ const u=new URL(request.url),p=u.pathname,m=request.method;
+ if(!p.startsWith("/api/")) return env.ASSETS.fetch(request);
+ if(p==="/api/v1/health") return json({ok:true,version:"v1"});
+ if(p==="/api/v1/auth/login"&&m==="POST"){
+   const b=await body(request);
+   if(String(b.username||"")!==String(env.ADMIN_USERNAME||"")||String(b.password||"")!==String(env.ADMIN_PASSWORD||"")) return json({error:"Invalid credentials"},401);
+   const s=hex(32),h=await sha(s),exp=Date.now()+86400000;
+   await env.DB.prepare("INSERT INTO sessions(token_hash,expires_at) VALUES(?,?)").bind(h,exp).run();
+   return json({ok:true},200,{"Set-Cookie":cookie(s,86400)});
+ }
+ if(p==="/api/v1/auth/logout"&&m==="POST"){
+   const s=getCookie(request);if(s)await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await sha(s)).run();
+   return json({ok:true},200,{"Set-Cookie":"cs_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0"});
+ }
+ if(p==="/api/v1/auth/me") return json({authenticated:await admin(request,env)});
+ for(const [table,fields] of Object.entries(resources)){
+   if(p===`/api/v1/${table}`&&m==="GET") return json((await env.DB.prepare(`SELECT * FROM ${table} ORDER BY id DESC`).all()).results);
+   if(p===`/api/v1/${table}`&&m==="POST"){
+     if(!await admin(request,env))return json({error:"Unauthorized"},401);
+     const b=await body(request),v=fields.map(f=>String(b?.[f]??"").trim());if(!v[0])return json({error:`${fields[0]} is required`},400);
+     const r=await env.DB.prepare(`INSERT INTO ${table} (${fields.join(",")}) VALUES (${fields.map(()=>"?").join(",")})`).bind(...v).run();
+     return json(await env.DB.prepare(`SELECT * FROM ${table} WHERE id=?`).bind(r.meta.last_row_id).first(),201);
+   }
+   const dm=p.match(new RegExp(`^/api/v1/${table}/(\\d+)$`));
+   if(dm&&m==="DELETE"){if(!await admin(request,env))return json({error:"Unauthorized"},401);await env.DB.prepare(`DELETE FROM ${table} WHERE id=?`).bind(dm[1]).run();return json({ok:true})}
+ }
+ if(p==="/api/v1/tokens"&&m==="GET"){if(!await admin(request,env))return json({error:"Unauthorized"},401);return json((await env.DB.prepare("SELECT id,name,created_at,revoked FROM tokens ORDER BY id DESC").all()).results)}
+ if(p==="/api/v1/tokens"&&m==="POST"){if(!await admin(request,env))return json({error:"Unauthorized"},401);const b=await body(request),name=String(b?.name||"").trim();if(!name)return json({error:"name is required"},400);const t=hex(32);await env.DB.prepare("INSERT INTO tokens(name,token_hash) VALUES(?,?)").bind(name,await sha(t)).run();return json({name,token:t},201)}
+ const rm=p.match(/^\/api\/v1\/tokens\/(\d+)\/revoke$/);
+ if(rm&&m==="POST"){if(!await admin(request,env))return json({error:"Unauthorized"},401);await env.DB.prepare("UPDATE tokens SET revoked=1 WHERE id=?").bind(rm[1]).run();return json({ok:true})}
+ return json({error:"Not found"},404);
+}};
